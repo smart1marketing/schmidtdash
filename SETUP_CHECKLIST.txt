@@ -1,0 +1,326 @@
+ECWID DASHBOARD SETUP CHECKLIST
+===============================
+
+Print this checklist and check off items as you complete them.
+
+## PHASE 1: PREPARATION (15 minutes)
+
+### Get Ecwid Credentials
+☐ Log in to https://my.ecwid.com
+☐ Navigate to Settings → API Tokens
+☐ Create new API token with scopes:
+  ☐ read_orders
+  ☐ read_products
+☐ Copy Store ID: ___________________________________
+☐ Copy API Token: _________________________________
+☐ Store these securely (never share!)
+
+### Prepare Files
+☐ Extract package contents
+☐ Verify all 8 files are present:
+  ☐ server.js
+  ☐ package.json
+  ☐ .gitignore
+  ☐ README.md
+  ☐ QUICK_START.txt
+  ☐ .env.example
+  ☐ render.yaml
+  ☐ embed-widget.html
+
+### Create GitHub Account (if needed)
+☐ Sign up at github.com
+☐ Verify email
+☐ Create SSH key (optional but recommended)
+
+---
+
+## PHASE 2: GITHUB SETUP (5 minutes)
+
+### Via Web Interface (Easiest)
+☐ Go to github.com/new
+☐ Create repository:
+  ☐ Name: ecwid-dashboard
+  ☐ Description: Ecwid ecommerce analytics dashboard
+  ☐ Visibility: PUBLIC (important for Render!)
+  ☐ Skip "Add .gitignore" (we have one)
+  ☐ Skip "Add license" (we have MIT)
+☐ Click "Create repository"
+☐ Click "Add file" → "Upload files"
+☐ Select and upload these 8 files:
+  ☐ server.js
+  ☐ package.json
+  ☐ .gitignore
+  ☐ README.md
+  ☐ QUICK_START.txt
+  ☐ .env.example
+  ☐ render.yaml
+  ☐ embed-widget.html
+☐ Commit message: "Initial commit: Ecwid dashboard"
+☐ Click "Commit changes"
+☐ Verify all files appear in repo
+
+### Via Git CLI (Advanced)
+☐ Open terminal
+☐ Navigate to folder with files
+☐ Run: git init
+☐ Run: git add .
+☐ Run: git commit -m "Initial commit"
+☐ Create repo on github.com
+☐ Run: git remote add origin https://github.com/USERNAME/ecwid-dashboard.git
+☐ Run: git push -u origin main
+☐ Verify files appear in GitHub
+
+---
+
+## PHASE 3: RENDER SETUP (10 minutes)
+
+### Create Render Account
+☐ Go to render.com
+☐ Sign up (can use GitHub login)
+☐ Verify email
+
+### Create Web Service
+☐ Click "New +" button
+☐ Select "Web Service"
+☐ Connect GitHub account (if prompted)
+☐ Select repository: ecwid-dashboard
+☐ Make sure it's PUBLIC on GitHub!
+
+### Configure Service
+☐ Name: ecwid-dashboard
+☐ Region: (default is fine)
+☐ Runtime: Node
+☐ Build Command: npm install
+☐ Start Command: npm start
+☐ Instance Type: Free (sufficient)
+☐ DO NOT click "Create Web Service" yet!
+
+### Add Environment Variables
+☐ Click "Environment" in left sidebar
+☐ Add first variable:
+  ☐ Key: ECWID_STORE_ID
+  ☐ Value: [paste your Store ID from Step 1]
+☐ Add second variable:
+  ☐ Key: ECWID_API_TOKEN
+  ☐ Value: [paste your API Token from Step 1]
+☐ Add third variable:
+  ☐ Key: NODE_ENV
+  ☐ Value: production
+☐ Click "Save Changes"
+
+### Deploy Service
+☐ Click "Create Web Service"
+☐ Wait for "Build in progress"
+☐ Watch logs for any errors
+☐ Wait for green "Live" status (takes 2-3 minutes)
+☐ Copy your service URL: https://ecwid-dashboard-XXX.onrender.com
+☐ Service URL: _______________________________________
+
+### Test Service
+☐ Open in browser: https://[YOUR_URL]/health
+☐ Should see: {"status":"ok","timestamp":"..."}
+☐ Open in browser: https://[YOUR_URL]/api/dashboard
+☐ Should see JSON data with orders and products
+☐ Check Render Logs for any "Error" messages
+☐ If issues, review troubleshooting section in README.md
+
+---
+
+## PHASE 4: HIGHLEVEL EMBEDDING (5 minutes)
+
+### Add HTML Code Block
+☐ Log in to HighLevel
+☐ Navigate to your website/page
+☐ Add a new "HTML Code Block" element
+☐ Paste the embedding code:
+
+```html
+<div id="ecwid-dashboard"></div>
+<script>
+  const API_URL = 'https://ecwid-dashboard-XXX.onrender.com/api/dashboard';
+  
+  fetch(API_URL)
+    .then(r => r.json())
+    .then(data => {
+      let html = `
+        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 800px;">
+          <h2>Ecommerce Dashboard</h2>
+          
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px;">
+            <div style="background: #f0f4ff; padding: 15px; border-radius: 6px;">
+              <p style="margin: 0; color: #666; font-size: 12px; text-transform: uppercase;">Orders This Week</p>
+              <p style="margin: 5px 0 0; font-size: 24px; font-weight: bold;">${data.weekData.ordersThisWeek}</p>
+              <p style="margin: 5px 0 0; font-size: 13px; color: ${data.weekData.orderChangePercent >= 0 ? '#10b981' : '#ef4444'};">
+                ${data.weekData.orderChangePercent >= 0 ? '↑' : '↓'} ${Math.abs(data.weekData.orderChangePercent)}% vs last week
+              </p>
+            </div>
+            
+            <div style="background: #fff4e6; padding: 15px; border-radius: 6px;">
+              <p style="margin: 0; color: #666; font-size: 12px; text-transform: uppercase;">Orders This Month</p>
+              <p style="margin: 5px 0 0; font-size: 24px; font-weight: bold;">${data.monthData.ordersThisMonth}</p>
+              <p style="margin: 5px 0 0; font-size: 13px; color: ${data.monthData.orderChangePercent >= 0 ? '#10b981' : '#ef4444'};">
+                ${data.monthData.orderChangePercent >= 0 ? '↑' : '↓'} ${Math.abs(data.monthData.orderChangePercent)}% vs last month
+              </p>
+            </div>
+          </div>
+
+          <h3>Top 10 Products This Week</h3>
+          <div style="display: grid; gap: 8px;">
+            ${data.topProductsThisWeek.map((p, i) => `
+              <div style="background: white; padding: 12px; border-left: 3px solid #3b82f6; border-radius: 4px;">
+                <strong>${i + 1}. ${p.name}</strong> - $${p.price}
+              </div>
+            `).join('')}
+          </div>
+
+          <p style="color: #999; font-size: 12px; margin-top: 20px;">
+            Last updated: ${new Date(data.lastUpdated).toLocaleString()}
+          </p>
+        </div>
+      `;
+      document.getElementById('ecwid-dashboard').innerHTML = html;
+    })
+    .catch(e => {
+      document.getElementById('ecwid-dashboard').innerHTML = '<p style="color: red;">Error loading dashboard</p>';
+      console.error(e);
+    });
+</script>
+```
+
+☐ Replace URL with your actual Render URL from Phase 3
+☐ Save element
+☐ Preview page
+☐ Data should display correctly
+☐ Check in mobile preview too
+☐ Publish page
+
+---
+
+## PHASE 5: VERIFICATION (5 minutes)
+
+### Test All Endpoints
+☐ Test /health: https://[YOUR_URL]/health
+☐ Test /api/dashboard: https://[YOUR_URL]/api/dashboard
+☐ Both return valid data
+☐ No errors in Render logs
+
+### Test Widget Display
+☐ Widget displays correctly
+☐ Numbers match API response
+☐ Colors/layout look good
+☐ Mobile view works
+☐ All links work (if any)
+
+### Test Data Updates
+☐ Note the timestamp
+☐ Manually trigger refresh: curl -X POST https://[YOUR_URL]/api/fetch-now
+☐ Timestamp updates
+☐ Data refreshes
+
+---
+
+## PHASE 6: FINAL CHECKLIST
+
+### Deployment Complete
+☐ GitHub repo is public and contains all files
+☐ Render service is deployed (green Live status)
+☐ Environment variables are set correctly
+☐ Service is running with no errors
+☐ API endpoints respond correctly
+☐ Widget displays in HighLevel
+☐ Data updates work
+☐ Mobile view looks good
+
+### Automation Ready
+☐ Daily 2 AM refresh is configured
+☐ Render Cron job will trigger automatically
+☐ No manual action needed daily
+☐ Logs are being captured
+
+### Security Check
+☐ .env file is in .gitignore (not committed)
+☐ API tokens are in Render environment (not in code)
+☐ Repository is public (needed for Render)
+☐ No API tokens exposed anywhere
+☐ CORS is enabled for HighLevel
+
+---
+
+## TROUBLESHOOTING QUICK FIXES
+
+### Widget shows nothing
+☐ Check browser console (F12) for errors
+☐ Verify Render URL is correct
+☐ Test /api/dashboard endpoint directly
+☐ Check Render logs for errors
+☐ Verify ECWID_STORE_ID and ECWID_API_TOKEN are set
+
+### Data is old or missing
+☐ Wait for 2 AM UTC for automatic refresh
+☐ Manual refresh: curl -X POST https://[YOUR_URL]/api/fetch-now
+☐ Check Render logs for fetch errors
+☐ Verify Ecwid API token is still valid
+☐ Check if Ecwid has new API requirements
+
+### Service keeps restarting
+☐ Check Render logs for error messages
+☐ Check server.js syntax
+☐ Verify all dependencies in package.json
+☐ Check Node.js version matches
+
+### 404 errors
+☐ Verify file paths are correct
+☐ Check .gitignore isn't excluding needed files
+☐ Rebuild service if needed
+
+---
+
+## NEXT STEPS (OPTIONAL)
+
+### Customize Styling
+☐ Edit the HTML code block styling
+☐ Change colors, fonts, spacing
+☐ Test responsive layout
+☐ Publish changes
+
+### Add Conversion Rate Tracking
+☐ Set up Google Analytics integration (see README.md)
+☐ Modify server.js to fetch GA data
+☐ Display conversion rates in widget
+☐ Test data appears
+
+### Set Up Alerts
+☐ Create email notification for big order changes
+☐ Add alert if daily refresh fails
+☐ Configure Render health checks
+
+### Monitor Performance
+☐ Check Render analytics
+☐ Review API response times
+☐ Monitor data accuracy
+☐ Check for API rate limit issues
+
+---
+
+## SUPPORT RESOURCES
+
+If you get stuck:
+1. Check README.md for detailed explanations
+2. Review Render logs (Service Dashboard → Logs)
+3. Test API endpoints directly in browser
+4. Check Ecwid API status page
+5. Review troubleshooting section in README.md
+
+---
+
+## COMPLETION SUMMARY
+
+Date Started: _______________
+Date Completed: _______________
+
+✅ All items checked = You're done!
+
+Service URL: _________________________________________
+Last Updated: _________________________________________
+
+Save this checklist for future reference.

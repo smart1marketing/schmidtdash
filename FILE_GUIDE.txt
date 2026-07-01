@@ -1,0 +1,232 @@
+ECWID DASHBOARD PACKAGE - COMPLETE FILE LISTING
+================================================
+
+📦 PACKAGE CONTENTS
+This package contains everything needed to deploy your Ecwid dashboard.
+
+## CORE APPLICATION FILES
+
+1. server.js (MAIN)
+   - Express.js backend
+   - Ecwid API integration
+   - Daily scheduling at 2 AM
+   - Data storage and API endpoints
+   - 300+ lines of production-ready code
+
+2. package.json (DEPENDENCIES)
+   - Lists all npm packages needed
+   - Specifies Node.js version (18.x)
+   - Includes npm start script
+
+3. .gitignore
+   - Prevents committing node_modules and .env files
+   - Excludes sensitive data from GitHub
+
+## DOCUMENTATION FILES
+
+4. README.md (COMPREHENSIVE GUIDE)
+   - Complete setup instructions
+   - Troubleshooting guide
+   - API endpoint documentation
+   - Conversion rate notes
+   - File structure overview
+
+5. QUICK_START.txt (FASTEST PATH)
+   - 15-minute setup guide
+   - Step-by-step instructions
+   - Verification checklist
+   - Quick troubleshooting
+
+6. .env.example (TEMPLATE)
+   - Shows what environment variables you need
+   - Instructions on where to get credentials
+   - Copy to .env locally (not committed to Git)
+
+## DEPLOYMENT & CONFIGURATION
+
+7. render.yaml (RENDER CONFIG)
+   - Automatic deployment configuration
+   - Specifies build and start commands
+   - Can be used for one-click deploy
+
+## WIDGET FILES
+
+8. embed-widget.html (STANDALONE WIDGET)
+   - Beautiful, responsive dashboard display
+   - Can be embedded in HighLevel directly
+   - Includes all CSS/styling
+   - Auto-refreshes every 5 minutes
+   - Mobile-responsive design
+
+## HOW TO USE THIS PACKAGE
+
+OPTION 1: Quick Upload to GitHub
+1. Extract all files to a folder
+2. Go to GitHub.com → New Repository
+3. Upload files directly via web interface
+4. Name repo: ecwid-dashboard
+5. Make it PUBLIC
+6. Skip to Render setup
+
+OPTION 2: Using Git CLI
+1. Extract files to a folder
+2. Open terminal in that folder
+3. Run: git init
+4. Run: git add .
+5. Run: git commit -m "Initial commit"
+6. Create repo on GitHub.com
+7. Run: git remote add origin https://github.com/YOUR_USERNAME/ecwid-dashboard.git
+8. Run: git push -u origin main
+
+OPTION 3: GitHub Desktop
+1. Extract files to a folder
+2. Open GitHub Desktop
+3. File → Clone Repository
+4. Create new local repository from folder
+5. Publish to GitHub
+
+## FILE UPLOAD CHECKLIST
+
+Before uploading to GitHub, ensure you have:
+✓ server.js
+✓ package.json
+✓ .gitignore
+✓ README.md
+✓ QUICK_START.txt
+✓ .env.example
+✓ render.yaml
+✓ embed-widget.html
+
+Total: 8 files
+
+DO NOT INCLUDE:
+✗ node_modules/ (folder - will be created by npm install)
+✗ .env (local file - never commit secrets)
+✗ data/ (folder - auto-created at runtime)
+
+## SETUP FLOW
+
+1. Get Ecwid Credentials
+   → Find Store ID and API Token in Ecwid dashboard
+   → Copy both values
+
+2. Create GitHub Repository
+   → Upload all 8 files
+   → Make repository PUBLIC
+   → Keep it for future updates
+
+3. Deploy to Render
+   → Connect GitHub repo
+   → Add environment variables
+   → Deploy service
+   → Get live URL
+
+4. Embed in HighLevel
+   → Use HTML code block
+   → Paste embed code (in README.md or QUICK_START.txt)
+   → Replace URL with your Render URL
+   → Save and publish
+
+5. Test & Monitor
+   → Visit /health endpoint
+   → Check /api/dashboard for data
+   → Monitor Render logs for errors
+   → Data refreshes daily at 2 AM
+
+## CUSTOMIZATION
+
+### Change the 2 AM refresh time
+Edit server.js, find this line:
+```
+cron.schedule('0 2 * * *', () => {
+```
+Change '0 2' to your desired time (UTC)
+Examples:
+- '0 5 * * *' = 5 AM UTC
+- '30 3 * * *' = 3:30 AM UTC
+- '0 0 * * *' = Midnight UTC
+
+### Customize widget styling
+Edit embed-widget.html
+- Colors: search for #3b82f6 (blue), #8b5cf6 (purple)
+- Fonts: modify font-family declarations
+- Layout: adjust grid-template-columns
+- Spacing: modify padding and gap values
+
+### Add more metrics
+Edit server.js
+- Add new API calls to fetchAllData()
+- Store values in the data object
+- Return in /api/dashboard response
+- Display in widget HTML
+
+## MONITORING & MAINTENANCE
+
+Daily:
+- Data auto-refreshes at 2 AM
+- No manual action needed
+- Render logs available in dashboard
+
+Weekly:
+- Check Render service health (green status)
+- Verify data is updating
+- Monitor any error patterns
+
+Monthly:
+- Review Render logs for patterns
+- Check Ecwid API usage
+- Verify credentials haven't changed
+
+## TROUBLESHOOTING BY FILE
+
+server.js issues:
+→ Check syntax errors
+→ Verify require() statements
+→ Check environment variables
+→ Review Render logs
+
+package.json issues:
+→ Ensure npm install runs successfully
+→ Check Node.js version compatibility
+→ Verify all dependencies are listed
+
+Widget issues:
+→ Check fetch URL matches your Render domain
+→ Verify CORS is enabled
+→ Check browser console for errors
+→ Test /api/dashboard endpoint directly
+
+## SUPPORT
+
+1. Check README.md for detailed explanations
+2. Check QUICK_START.txt for quick solutions
+3. Review Render logs for error messages
+4. Check Ecwid API documentation
+5. Test endpoints manually with curl or browser
+
+## VERSION HISTORY
+
+Version 1.0.0 - Initial Release
+- Basic order counting
+- Product listing
+- Daily scheduling
+- HTML widget
+- Render deployment ready
+
+## LICENSE
+
+MIT - Free to use and modify
+
+## SECURITY NOTES
+
+✓ Never commit .env file (already in .gitignore)
+✓ Always use Render environment variables for secrets
+✓ Rotate API tokens periodically
+✓ Keep dependencies updated
+✓ Use HTTPS for embeddings
+✓ Validate all inputs in production
+
+---
+
+Ready to deploy? Start with QUICK_START.txt or README.md
+Questions? Check the full documentation in README.md
