@@ -1,0 +1,181 @@
+QUICK SETUP GUIDE
+================
+
+This guide will get your Ecwid dashboard live in 15 minutes.
+
+## STEP 1: Get Ecwid Credentials (2 minutes)
+
+1. Log in: https://my.ecwid.com
+2. Settings → API Tokens
+3. Create new token with scopes:
+   ✓ read_orders
+   ✓ read_products
+4. Copy:
+   - Store ID: ______________________
+   - API Token: ____________________
+
+## STEP 2: Set Up GitHub (3 minutes)
+
+Option A - Fast (Web Interface):
+1. Go to github.com/new
+2. Create repo named: ecwid-dashboard
+3. Make it PUBLIC
+4. Upload these files:
+   - server.js
+   - package.json
+   - .gitignore
+   - README.md
+   - embed-widget.html
+   - render.yaml
+   - .env.example
+
+Option B - Git CLI:
+```bash
+git clone https://github.com/YOUR_USERNAME/ecwid-dashboard.git
+cd ecwid-dashboard
+# Copy files here
+git add .
+git commit -m "Initial commit"
+git push -u origin main
+```
+
+## STEP 3: Deploy to Render (5 minutes)
+
+1. Go to render.com (sign up if needed)
+2. Click: New + → Web Service
+3. Connect GitHub
+4. Select: ecwid-dashboard repo
+5. Configure:
+   Name: ecwid-dashboard
+   Runtime: Node
+   Build: npm install
+   Start: npm start
+   Plan: Free
+
+6. DON'T click Deploy yet - add environment variables first
+
+7. Click: Environment (left sidebar)
+8. Add these variables:
+   Key: ECWID_STORE_ID
+   Value: [Your Store ID from Step 1]
+   
+   Key: ECWID_API_TOKEN
+   Value: [Your API Token from Step 1]
+   
+   Key: NODE_ENV
+   Value: production
+
+9. Save Changes
+10. Service will auto-deploy
+
+11. Wait for green "Live" status
+12. Copy your URL: https://ecwid-dashboard.onrender.com
+
+## STEP 4: Test API (1 minute)
+
+Open in browser:
+https://ecwid-dashboard.onrender.com/health
+
+Should see: {"status":"ok","timestamp":"..."}
+
+## STEP 5: Embed in HighLevel (3 minutes)
+
+1. In HighLevel, add HTML Code Block
+2. Paste this code:
+
+```html
+<div id="dashboard"></div>
+<script>
+fetch('https://ecwid-dashboard.onrender.com/api/dashboard')
+  .then(r=>r.json())
+  .then(d=>{
+    let h=`<div style="font-family:sans-serif"><h2>Orders This Week</h2>
+    <div style="font-size:32px;font-weight:bold">${d.weekData.ordersThisWeek}</div>
+    <div style="font-size:14px;color:${d.weekData.orderChangePercent>=0?'green':'red'}">
+    ${d.weekData.orderChangePercent>=0?'↑':'↓'} ${Math.abs(d.weekData.orderChangePercent)}% vs last week
+    </div>
+    <h2>Top 10 Products This Week</h2>
+    ${d.topProductsThisWeek.map((p,i)=>`
+    <div style="padding:8px;background:#f0f0f0;margin:4px 0">
+    ${i+1}. ${p.name} - $${p.price}</div>`).join('')}
+    <p style="font-size:12px;color:#999">Updated: ${new Date(d.lastUpdated).toLocaleString()}</p></div>`;
+    document.getElementById('dashboard').innerHTML=h;
+  })
+  .catch(e=>console.error(e));
+</script>
+```
+
+3. Replace the URL with your actual Render URL
+4. Save and publish
+
+## VERIFICATION CHECKLIST
+
+- [ ] Ecwid API credentials saved
+- [ ] GitHub repo created with all files
+- [ ] Render service deployed (green status)
+- [ ] Environment variables set in Render
+- [ ] /health endpoint returns {"status":"ok"}
+- [ ] /api/dashboard endpoint returns data
+- [ ] Widget embedded in HighLevel
+- [ ] Data displays correctly on page
+
+## TROUBLESHOOTING
+
+Issue: "Cannot GET /api/dashboard"
+→ Check Render deployment succeeded
+→ Check environment variables are set
+→ Check server.js is in root directory
+
+Issue: "Failed to fetch" in browser
+→ Check your URL matches your Render domain
+→ Check CORS is enabled (it should be by default)
+→ Check browser console (F12) for errors
+
+Issue: No data showing
+→ Verify Ecwid API token has correct scopes
+→ Click /api/fetch-now endpoint to trigger refresh
+→ Check Render logs for errors
+
+Issue: Service keeps restarting
+→ Check for syntax errors in server.js
+→ Check environment variables are correct
+→ Review Render logs (Events tab)
+
+## DATA REFRESH SCHEDULE
+
+- Runs automatically at 2 AM UTC daily
+- Manual refresh: POST to /api/fetch-now
+- Auto-retries on failure
+- Data stored in dashboard-data.json
+
+## NEXT STEPS
+
+After everything works:
+1. Customize colors in embed-widget.html
+2. Add conversion rate tracking (needs Google Analytics)
+3. Create admin dashboard to update conversions
+4. Set up alerts for big order changes
+
+## SUPPORT RESOURCES
+
+- Ecwid API Docs: https://developer.ecwid.com
+- Render Docs: https://render.com/docs
+- Node.js Docs: https://nodejs.org/docs
+
+## IMPORTANT NOTES
+
+⚠️ Free Render tier may hibernate during inactivity
+   → Will restart automatically on next request
+   → First request after sleep takes ~30 seconds
+   → Upgrade to paid if you need guaranteed 24/7 uptime
+
+⚠️ Conversion rates require additional tracking
+   → Ecwid API doesn't provide visitor count
+   → Need Google Analytics or custom tracking
+   → Instructions in README.md
+
+⚠️ Never commit .env file to GitHub
+   → It's in .gitignore for safety
+   → Always use Render's environment variables
+
+Questions? Check the full README.md for detailed explanations.
