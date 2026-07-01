@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ecwid Dashboard Widget</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', sans-serif;
+      background: #f8f9fa;
+      padding: 20px;
+    }
+
+    .dashboard-container {
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    .dashboard-header {
+      margin-bottom: 30px;
+    }
+
+    .dashboard-header h1 {
+      font-size: 28px;
+      color: #1a202c;
+      margin-bottom: 8px;
+    }
+
+    .dashboard-header p {
+      font-size: 14px;
+      color: #718096;
+    }
+
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 16px;
+      margin-bottom: 30px;
+    }
+
+    .metric-card {
+      background: white;
+      border-radius: 8px;
+      padding: 20px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+      border-left: 4px solid #3b82f6;
+    }
+
+    .metric-card.month {
+      border-left-color: #8b5cf6;
+    }
+
+    .metric-label {
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      color: #718096;
+      margin-bottom: 8px;
+      letter-spacing: 0.5px;
+    }
+
+    .metric-value {
+      font-size: 32px;
+      font-weight: 700;
+      color: #1a202c;
+      margin-bottom: 8px;
+    }
+
+    .metric-change {
+      font-size: 13px;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .metric-change.positive {
+      color: #10b981;
+    }
+
+    .metric-change.negative {
+      color: #ef4444;
+    }
+
+    .products-section {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+      gap: 30px;
+      margin-bottom: 30px;
+    }
+
+    .products-card {
+      background: white;
+      border-radius: 8px;
+      padding: 20px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    }
+
+    .products-card h3 {
+      font-size: 16px;
+      color: #1a202c;
+      margin-bottom: 16px;
+      padding-bottom: 12px;
+      border-bottom: 2px solid #e2e8f0;
+    }
+
+    .product-item {
+      padding: 12px 0;
+      border-bottom: 1px solid #f0f4f8;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .product-item:last-child {
+      border-bottom: none;
+    }
+
+    .product-name {
+      font-size: 14px;
+      color: #1a202c;
+      font-weight: 500;
+    }
+
+    .product-price {
+      font-size: 14px;
+      color: #718096;
+      font-weight: 600;
+    }
+
+    .product-rank {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 24px;
+      height: 24px;
+      background: #eef2ff;
+      color: #3b82f6;
+      border-radius: 50%;
+      font-size: 12px;
+      font-weight: 700;
+      margin-right: 8px;
+    }
+
+    .products-card.month .product-rank {
+      background: #f3e8ff;
+      color: #8b5cf6;
+    }
+
+    .footer {
+      text-align: center;
+      font-size: 12px;
+      color: #a0aec0;
+      margin-top: 30px;
+      padding-top: 20px;
+      border-top: 1px solid #e2e8f0;
+    }
+
+    .loading {
+      text-align: center;
+      padding: 40px 20px;
+      color: #718096;
+    }
+
+    .loading-spinner {
+      display: inline-block;
+      width: 40px;
+      height: 40px;
+      border: 4px solid #e2e8f0;
+      border-top-color: #3b82f6;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin-bottom: 16px;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .error {
+      background: #fee;
+      border: 1px solid #fcc;
+      color: #c33;
+      padding: 16px;
+      border-radius: 6px;
+      margin-bottom: 20px;
+    }
+
+    @media (max-width: 768px) {
+      .metric-value {
+        font-size: 24px;
+      }
+
+      .products-section {
+        grid-template-columns: 1fr;
+      }
+
+      .dashboard-header h1 {
+        font-size: 22px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="dashboard-container">
+    <div class="dashboard-header">
+      <h1>Ecommerce Dashboard</h1>
+      <p id="last-updated">Loading data...</p>
+    </div>
+
+    <div id="content">
+      <div class="loading">
+        <div class="loading-spinner"></div>
+        <p>Fetching your ecommerce data...</p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Configuration
+    const DASHBOARD_API_URL = 'https://ecwid-dashboard.onrender.com/api/dashboard';
+
+    // Format currency
+    function formatCurrency(value) {
+      return new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: 'USD'
+      }).format(value);
+    }
+
+    // Format date
+    function formatDate(isoString) {
+      return new Date(isoString).toLocaleString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    }
+
+    // Render dashboard
+    function renderDashboard(data) {
+      const weekData = data.weekData;
+      const monthData = data.monthData;
+
+      const weekChangeClass = weekData.orderChangePercent >= 0 ? 'positive' : 'negative';
+      const monthChangeClass = monthData.orderChangePercent >= 0 ? 'positive' : 'negative';
+      const weekChangeSymbol = weekData.orderChangePercent >= 0 ? '↑' : '↓';
+      const monthChangeSymbol = monthData.orderChangePercent >= 0 ? '↑' : '↓';
+
+      let html = `
+        <div class="metrics-grid">
+          <div class="metric-card">
+            <div class="metric-label">Orders This Week</div>
+            <div class="metric-value">${weekData.ordersThisWeek}</div>
+            <div class="metric-change ${weekChangeClass}">
+              <span>${weekChangeSymbol}</span>
+              <span>${Math.abs(weekData.orderChangePercent)}% vs last week</span>
+            </div>
+          </div>
+
+          <div class="metric-card month">
+            <div class="metric-label">Orders This Month</div>
+            <div class="metric-value">${monthData.ordersThisMonth}</div>
+            <div class="metric-change ${monthChangeClass}">
+              <span>${monthChangeSymbol}</span>
+              <span>${Math.abs(monthData.orderChangePercent)}% vs last month</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="products-section">
+          <div class="products-card">
+            <h3>🏆 Top 10 Products This Week</h3>
+            ${data.topProductsThisWeek.length > 0 
+              ? data.topProductsThisWeek.map((product, index) => `
+                  <div class="product-item">
+                    <div style="display: flex; align-items: center;">
+                      <span class="product-rank">${index + 1}</span>
+                      <div>
+                        <div class="product-name">${product.name}</div>
+                        <div style="font-size: 12px; color: #a0aec0;">SKU: ${product.sku}</div>
+                      </div>
+                    </div>
+                    <div class="product-price">${formatCurrency(product.price)}</div>
+                  </div>
+                `).join('')
+              : '<p style="color: #718096; padding: 16px 0;">No products data available</p>'
+            }
+          </div>
+
+          <div class="products-card month">
+            <h3>🏆 Top 10 Products This Month</h3>
+            ${data.topProductsThisMonth.length > 0 
+              ? data.topProductsThisMonth.map((product, index) => `
+                  <div class="product-item">
+                    <div style="display: flex; align-items: center;">
+                      <span class="product-rank">${index + 1}</span>
+                      <div>
+                        <div class="product-name">${product.name}</div>
+                        <div style="font-size: 12px; color: #a0aec0;">SKU: ${product.sku}</div>
+                      </div>
+                    </div>
+                    <div class="product-price">${formatCurrency(product.price)}</div>
+                  </div>
+                `).join('')
+              : '<p style="color: #718096; padding: 16px 0;">No products data available</p>'
+            }
+          </div>
+        </div>
+
+        <div class="footer">
+          📊 Last updated: ${formatDate(data.lastUpdated)}
+          ${data.note ? `<div style="margin-top: 12px; font-size: 11px; color: #cbd5e0;">${data.note}</div>` : ''}
+        </div>
+      `;
+
+      document.getElementById('content').innerHTML = html;
+      document.getElementById('last-updated').textContent = `Last updated: ${formatDate(data.lastUpdated)}`;
+    }
+
+    // Render error
+    function renderError(message) {
+      document.getElementById('content').innerHTML = `
+        <div class="error">
+          <strong>Error Loading Dashboard</strong><br>
+          ${message}<br><br>
+          <small>Please check your API URL and ensure your Render service is running.</small>
+        </div>
+      `;
+    }
+
+    // Fetch and render
+    async function loadDashboard() {
+      try {
+        const response = await fetch(DASHBOARD_API_URL);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        
+        const data = await response.json();
+        renderDashboard(data);
+      } catch (error) {
+        console.error('Dashboard error:', error);
+        renderError(`Failed to fetch dashboard: ${error.message}`);
+      }
+    }
+
+    // Load on page load
+    document.addEventListener('DOMContentLoaded', loadDashboard);
+
+    // Refresh every 5 minutes
+    setInterval(loadDashboard, 5 * 60 * 1000);
+  </script>
+</body>
+</html>
