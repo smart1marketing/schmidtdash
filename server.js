@@ -1,454 +1,254 @@
 const express = require('express');
-const axios = require('axios');
-const cron = require('node-cron');
-const fs = require('fs');
-const path = require('path');
+const fetch = require('node-fetch');
+const cors = require('cors');
 
 const app = express();
-app.use(express.json());
+const PORT = process.env.PORT || 10000;
 
-// CORS middleware
-app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
-  next();
-});
+// Enable CORS
+app.use(cors());
 
-// Configuration from environment variables
-const ECWID_STORE_ID = process.env.ECWID_STORE_ID;
-const ECWID_API_TOKEN = process.env.ECWID_API_TOKEN;
-
-if (!ECWID_STORE_ID || !ECWID_API_TOKEN) {
-  console.warn('⚠️  Missing ECWID_STORE_ID or ECWID_API_TOKEN environment variables');
-}
-
-// Data storage path
-const dataDir = path.join(__dirname, 'data');
-const dataFile = path.join(dataDir, 'dashboard-data.json');
-
-// Ensure data directory exists
-if (!fs.existsSync(dataDir)) {
-  fs.mkdirSync(dataDir, { recursive: true });
-}
-
-// Initialize data file
-const initDataFile = () => {
-  if (!fs.existsSync(dataFile)) {
-    const initialData = {
-      lastUpdated: null,
-      weekData: {
-        ordersThisWeek: 0,
-        ordersLastWeek: 0,
-        orderChangePercent: 0,
-        abandonedCartsThisWeek: 0,
-        abandonedCartsLastWeek: 0,
-        conversionRateThisWeek: 'N/A',
-        conversionRateLastWeek: 'N/A'
-      },
-      monthData: {
-        ordersThisMonth: 0,
-        ordersLastMonth: 0,
-        orderChangePercent: 0,
-        abandonedCartsThisMonth: 0,
-        abandonedCartsLastMonth: 0,
-        conversionRateThisMonth: 'N/A',
-        conversionRateLastMonth: 'N/A'
-      },
-      topProductsThisWeek: [],
-      topProductsThisMonth: []
-    };
-    fs.writeFileSync(dataFile, JSON.stringify(initialData, null, 2));
-  }
-};
-
-// Format date for Ecwid API (YYYY-MM-DD)
-const formatDateForAPI = (date) => {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-};
-
-// Get date ranges
-const getDateRanges = () => {
-  const today = new Date();
-  today.setHours(23, 59, 59, 999);
-  
-  const startOfToday = new Date(today);
-  startOfToday.setHours(0, 0, 0, 0);
-  
-  // This week (last 7 days)
-  const weekAgo = new Date(today);
-  weekAgo.setDate(weekAgo.getDate() - 7);
-  weekAgo.setHours(0, 0, 0, 0);
-  
-  // Last week (7-14 days ago)
-  const twoWeeksAgo = new Date(today);
-  twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
-  twoWeeksAgo.setHours(0, 0, 0, 0);
-  
-  // This month (last 30 days)
-  const monthAgo = new Date(today);
-  monthAgo.setDate(monthAgo.getDate() - 30);
-  monthAgo.setHours(0, 0, 0, 0);
-  
-  // Last month (30-60 days ago)
-  const twoMonthsAgo = new Date(today);
-  twoMonthsAgo.setDate(twoMonthsAgo.getDate() - 60);
-  twoMonthsAgo.setHours(0, 0, 0, 0);
-  
-  return {
-    today: startOfToday,
-    weekAgo,
-    twoWeeksAgo,
-    monthAgo,
-    twoMonthsAgo
-  };
-};
-
-// Fetch all orders from Ecwid API
-const fetchAllOrders = async () => {
-  try {
-    const headers = {
-      'Authorization': `Bearer ${ECWID_API_TOKEN}`
-    };
-
-    let allOrders = [];
-    let offset = 0;
-    const limit = 100;
-    let hasMore = true;
-
-    console.log('📡 Fetching orders from Ecwid API...');
-
-    while (hasMore) {
-      const response = await axios.get(
-        `https://api.ecwid.com/v3/${ECWID_STORE_ID}/orders`,
-        {
-          headers,
-          params: {
-            limit: limit,
-            offset: offset
-          }
-        }
-      );
-
-      if (response.data && response.data.items) {
-        allOrders = allOrders.concat(response.data.items);
-        offset += limit;
-        hasMore = response.data.items.length === limit;
-        console.log(`  📦 Fetched ${allOrders.length} orders so far...`);
-      } else {
-        hasMore = false;
-      }
-    }
-
-    console.log(`✅ Total orders fetched: ${allOrders.length}`);
-    return allOrders;
-  } catch (error) {
-    console.error('❌ Error fetching orders:', error.message);
-    return [];
-  }
-};
-
-// Fetch abandoned carts from Ecwid API
-const fetchAbandonedCarts = async () => {
-  try {
-    const headers = {
-      'Authorization': `Bearer ${ECWID_API_TOKEN}`
-    };
-
-    let allCarts = [];
-    let offset = 0;
-    const limit = 100;
-    let hasMore = true;
-
-    console.log('🛒 Fetching abandoned carts from Ecwid API...');
-
-    while (hasMore) {
-      const response = await axios.get(
-        `https://api.ecwid.com/v3/${ECWID_STORE_ID}/abandoned_carts`,
-        {
-          headers,
-          params: {
-            limit: limit,
-            offset: offset
-          }
-        }
-      );
-
-      if (response.data && response.data.items) {
-        allCarts = allCarts.concat(response.data.items);
-        offset += limit;
-        hasMore = response.data.items.length === limit;
-        console.log(`  🛒 Fetched ${allCarts.length} carts so far...`);
-      } else {
-        hasMore = false;
-      }
-    }
-
-    console.log(`✅ Total abandoned carts fetched: ${allCarts.length}`);
-    return allCarts;
-  } catch (error) {
-    console.error('❌ Error fetching abandoned carts:', error.message);
-    return [];
-  }
-};
-
-// Fetch all products from Ecwid API
-const fetchAllProducts = async () => {
-  try {
-    const headers = {
-      'Authorization': `Bearer ${ECWID_API_TOKEN}`
-    };
-
-    let allProducts = [];
-    let offset = 0;
-    const limit = 100;
-    let hasMore = true;
-
-    console.log('📦 Fetching products from Ecwid API...');
-
-    while (hasMore) {
-      const response = await axios.get(
-        `https://api.ecwid.com/v3/${ECWID_STORE_ID}/products`,
-        {
-          headers,
-          params: {
-            limit: limit,
-            offset: offset
-          }
-        }
-      );
-
-      if (response.data && response.data.items) {
-        allProducts = allProducts.concat(response.data.items);
-        offset += limit;
-        hasMore = response.data.items.length === limit;
-        console.log(`  🛍️  Fetched ${allProducts.length} products so far...`);
-      } else {
-        hasMore = false;
-      }
-    }
-
-    console.log(`✅ Total products fetched: ${allProducts.length}`);
-    return allProducts;
-  } catch (error) {
-    console.error('❌ Error fetching products:', error.message);
-    return [];
-  }
-};
-
-// Filter items by date range
-const filterByDateRange = (items, startDate, endDate, dateField = 'createDate') => {
-  return items.filter(item => {
-    if (!item[dateField]) return false;
-    const itemDate = new Date(item[dateField]);
-    return itemDate >= startDate && itemDate <= endDate;
-  });
-};
-
-// Get top products
-const getTopProducts = (products, limit = 10) => {
-  return products
-    .slice(0, limit)
-    .map(product => ({
-      id: product.id,
-      name: product.name,
-      price: product.price || 0,
-      sku: product.sku || 'N/A',
-      quantity: product.quantity || 0,
-      url: product.url || '#'
-    }));
-};
-
-// Main data fetch function
-const fetchAllData = async () => {
-  try {
-    console.log('\n🔄 Starting data fetch...');
-    console.log('⏰ Started at:', new Date().toLocaleString());
-
-    const dateRanges = getDateRanges();
-
-    // Fetch all data from Ecwid
-    const allOrders = await fetchAllOrders();
-    const abandonedCarts = await fetchAbandonedCarts();
-    const allProducts = await fetchAllProducts();
-
-    // ========== WEEK DATA ==========
-    const ordersThisWeek = filterByDateRange(
-      allOrders,
-      dateRanges.weekAgo,
-      dateRanges.today
-    );
-
-    const ordersLastWeek = filterByDateRange(
-      allOrders,
-      dateRanges.twoWeeksAgo,
-      dateRanges.weekAgo
-    );
-
-    const cartsThisWeek = filterByDateRange(
-      abandonedCarts,
-      dateRanges.weekAgo,
-      dateRanges.today
-    );
-
-    const cartsLastWeek = filterByDateRange(
-      abandonedCarts,
-      dateRanges.twoWeeksAgo,
-      dateRanges.weekAgo
-    );
-
-    // ========== MONTH DATA ==========
-    const ordersThisMonth = filterByDateRange(
-      allOrders,
-      dateRanges.monthAgo,
-      dateRanges.today
-    );
-
-    const ordersLastMonth = filterByDateRange(
-      allOrders,
-      dateRanges.twoMonthsAgo,
-      dateRanges.monthAgo
-    );
-
-    const cartsThisMonth = filterByDateRange(
-      abandonedCarts,
-      dateRanges.monthAgo,
-      dateRanges.today
-    );
-
-    const cartsLastMonth = filterByDateRange(
-      abandonedCarts,
-      dateRanges.twoMonthsAgo,
-      dateRanges.monthAgo
-    );
-
-    // Calculate week changes
-    const weekOrderChange = ordersLastWeek.length > 0
-      ? (((ordersThisWeek.length - ordersLastWeek.length) / ordersLastWeek.length) * 100).toFixed(1)
-      : 0;
-
-    const weekCartChange = cartsLastWeek.length > 0
-      ? (((cartsThisWeek.length - cartsLastWeek.length) / cartsLastWeek.length) * 100).toFixed(1)
-      : 0;
-
-    // Calculate month changes
-    const monthOrderChange = ordersLastMonth.length > 0
-      ? (((ordersThisMonth.length - ordersLastMonth.length) / ordersLastMonth.length) * 100).toFixed(1)
-      : 0;
-
-    const monthCartChange = cartsLastMonth.length > 0
-      ? (((cartsThisMonth.length - cartsLastMonth.length) / cartsLastMonth.length) * 100).toFixed(1)
-      : 0;
-
-    // Get top products
-    const topProductsThisWeek = getTopProducts(allProducts, 10);
-    const topProductsThisMonth = getTopProducts(allProducts, 10);
-
-    // Compile data
-    const data = {
-      lastUpdated: new Date().toISOString(),
-      fetchedAt: new Date().toLocaleString('en-US', { timeZone: 'America/Chicago' }),
-      weekData: {
-        ordersThisWeek: ordersThisWeek.length,
-        ordersLastWeek: ordersLastWeek.length,
-        orderChangePercent: parseFloat(weekOrderChange),
-        abandonedCartsThisWeek: cartsThisWeek.length,
-        abandonedCartsLastWeek: cartsLastWeek.length,
-        cartChangePercent: parseFloat(weekCartChange),
-        conversionRateThisWeek: 'N/A - Add Google Analytics',
-        conversionRateLastWeek: 'N/A - Add Google Analytics',
-        dateRange: {
-          from: formatDateForAPI(dateRanges.weekAgo),
-          to: formatDateForAPI(dateRanges.today)
-        }
-      },
-      monthData: {
-        ordersThisMonth: ordersThisMonth.length,
-        ordersLastMonth: ordersLastMonth.length,
-        orderChangePercent: parseFloat(monthOrderChange),
-        abandonedCartsThisMonth: cartsThisMonth.length,
-        abandonedCartsLastMonth: cartsLastMonth.length,
-        cartChangePercent: parseFloat(monthCartChange),
-        conversionRateThisMonth: 'N/A - Add Google Analytics',
-        conversionRateLastMonth: 'N/A - Add Google Analytics',
-        dateRange: {
-          from: formatDateForAPI(dateRanges.monthAgo),
-          to: formatDateForAPI(dateRanges.today)
-        }
-      },
-      topProductsThisWeek,
-      topProductsThisMonth,
-      summary: {
-        totalOrders: allOrders.length,
-        totalAbandonedCarts: abandonedCarts.length,
-        totalProducts: allProducts.length
-      },
-      note: 'Visitor data and conversion rate require Google Analytics integration'
-    };
-
-    // Save to file
-    fs.writeFileSync(dataFile, JSON.stringify(data, null, 2));
-    
-    console.log('✅ Data updated successfully!');
-    console.log('\n📊 WEEK SUMMARY:');
-    console.log(`   Orders This Week: ${ordersThisWeek.length} (${weekOrderChange > 0 ? '+' : ''}${weekOrderChange}%)`);
-    console.log(`   Abandoned Carts This Week: ${cartsThisWeek.length} (${weekCartChange > 0 ? '+' : ''}${weekCartChange}%)`);
-    console.log('\n📊 MONTH SUMMARY:');
-    console.log(`   Orders This Month: ${ordersThisMonth.length} (${monthOrderChange > 0 ? '+' : ''}${monthOrderChange}%)`);
-    console.log(`   Abandoned Carts This Month: ${cartsThisMonth.length} (${monthCartChange > 0 ? '+' : ''}${monthCartChange}%)`);
-    console.log(`   🛍️  Total Products: ${allProducts.length}`);
-    
-    return data;
-  } catch (error) {
-    console.error('❌ Fatal error in fetchAllData:', error.message);
-  }
-};
-
-// Initialize and schedule
-initDataFile();
-
-// Run immediately on startup
-console.log('⏰ Running initial fetch on startup...');
-fetchAllData();
-
-// Schedule to run at 2 AM UTC daily
-cron.schedule('0 2 * * *', () => {
-  console.log('⏰ Scheduled fetch triggered at 2 AM UTC');
-  fetchAllData();
-});
+// Configuration
+const STORE_ID = process.env.STORE_ID || '111281497';
+const API_TOKEN = process.env.ECWID_API_TOKEN;
+const API_BASE_URL = `https://app.ecwid.com/api/v3/${STORE_ID}`;
 
 // Health check endpoint
 app.get('/health', (req, res) => {
-  res.json({ 
-    status: 'ok',
-    timestamp: new Date().toISOString()
-  });
+    res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// Main API endpoint
-app.get('/api/dashboard', (req, res) => {
-  try {
-    const data = JSON.parse(fs.readFileSync(dataFile, 'utf8'));
-    res.json(data);
-  } catch (error) {
-    console.error('❌ Error reading dashboard data:', error.message);
-    res.status(500).json({ error: 'Failed to load dashboard data' });
-  }
-});
+// Helper function to make API requests
+async function fetchFromEcwid(endpoint, params = {}) {
+    const url = new URL(`${API_BASE_URL}${endpoint}`);
+    
+    // Add query parameters
+    Object.keys(params).forEach(key => {
+        url.searchParams.append(key, params[key]);
+    });
 
-// Manual trigger endpoint (useful for testing)
-app.post('/api/fetch-now', async (req, res) => {
-  console.log('📡 Manual fetch triggered');
-  const data = await fetchAllData();
-  res.json(data);
+    const options = {
+        method: 'GET',
+        headers: {
+            'Authorization': `Bearer ${API_TOKEN}`,
+            'Accept': 'application/json'
+        }
+    };
+
+    try {
+        const response = await fetch(url.toString(), options);
+        
+        if (!response.ok) {
+            console.error(`❌ Ecwid API error [${endpoint}]: ${response.status} ${response.statusText}`);
+            return null;
+        }
+
+        const data = await response.json();
+        return data;
+    } catch (error) {
+        console.error(`❌ Error fetching ${endpoint}:`, error.message);
+        return null;
+    }
+}
+
+// Helper function to get date range
+function getDateRange(period = 'week') {
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    let startDate;
+
+    if (period === 'week') {
+        // Start of this week (Sunday)
+        const dayOfWeek = startOfToday.getDay();
+        startDate = new Date(startOfToday);
+        startDate.setDate(startDate.getDate() - dayOfWeek);
+    } else if (period === 'month') {
+        // Start of this month
+        startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+    } else if (period === 'lastWeek') {
+        // Start of last week
+        const dayOfWeek = startOfToday.getDay();
+        startDate = new Date(startOfToday);
+        startDate.setDate(startDate.getDate() - dayOfWeek - 7);
+        const endDate = new Date(startDate);
+        endDate.setDate(endDate.getDate() + 7);
+        return { startDate, endDate };
+    } else if (period === 'lastMonth') {
+        // Start of last month
+        startDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        const endDate = new Date(now.getFullYear(), now.getMonth(), 1);
+        return { startDate, endDate };
+    }
+
+    return { startDate, endDate: new Date() };
+}
+
+// Main dashboard endpoint
+app.get('/api/dashboard', async (req, res) => {
+    console.log(`\n🔄 Starting data fetch at ${new Date().toLocaleString()}...`);
+
+    if (!API_TOKEN) {
+        console.error('❌ ECWID_API_TOKEN environment variable is not set');
+        return res.status(500).json({ error: 'API token not configured' });
+    }
+
+    // Initialize response object
+    const dashboard = {
+        thisWeek: { totalOrders: 0, totalRevenue: 0, abandonedCarts: 0 },
+        lastWeek: { totalOrders: 0, totalRevenue: 0, abandonedCarts: 0 },
+        thisMonth: { totalOrders: 0, totalRevenue: 0, abandonedCarts: 0 },
+        lastMonth: { totalOrders: 0, totalRevenue: 0, abandonedCarts: 0 },
+        topProducts: [],
+        lastUpdated: new Date().toISOString()
+    };
+
+    // Fetch orders for this week
+    console.log('📡 Fetching orders for this week...');
+    const { startDate: thisWeekStart } = getDateRange('week');
+    const thisWeekOrders = await fetchFromEcwid('/orders', {
+        limit: 100,
+        offset: 0,
+        orderBy: 'createdate'
+    });
+
+    if (thisWeekOrders && thisWeekOrders.items) {
+        const thisWeekFiltered = thisWeekOrders.items.filter(order => {
+            const orderDate = new Date(order.createDate);
+            return orderDate >= thisWeekStart;
+        });
+        dashboard.thisWeek.totalOrders = thisWeekFiltered.length;
+        dashboard.thisWeek.totalRevenue = thisWeekFiltered.reduce((sum, order) => sum + (order.total || 0), 0);
+    }
+
+    // Fetch orders for last week
+    console.log('📡 Fetching orders for last week...');
+    const { startDate: lastWeekStart, endDate: lastWeekEnd } = getDateRange('lastWeek');
+    const lastWeekOrders = await fetchFromEcwid('/orders', {
+        limit: 100,
+        offset: 0,
+        orderBy: 'createdate'
+    });
+
+    if (lastWeekOrders && lastWeekOrders.items) {
+        const lastWeekFiltered = lastWeekOrders.items.filter(order => {
+            const orderDate = new Date(order.createDate);
+            return orderDate >= lastWeekStart && orderDate < lastWeekEnd;
+        });
+        dashboard.lastWeek.totalOrders = lastWeekFiltered.length;
+        dashboard.lastWeek.totalRevenue = lastWeekFiltered.reduce((sum, order) => sum + (order.total || 0), 0);
+    }
+
+    // Fetch orders for this month
+    console.log('📡 Fetching orders for this month...');
+    const { startDate: thisMonthStart } = getDateRange('month');
+    const thisMonthOrders = await fetchFromEcwid('/orders', {
+        limit: 100,
+        offset: 0,
+        orderBy: 'createdate'
+    });
+
+    if (thisMonthOrders && thisMonthOrders.items) {
+        const thisMonthFiltered = thisMonthOrders.items.filter(order => {
+            const orderDate = new Date(order.createDate);
+            return orderDate >= thisMonthStart;
+        });
+        dashboard.thisMonth.totalOrders = thisMonthFiltered.length;
+        dashboard.thisMonth.totalRevenue = thisMonthFiltered.reduce((sum, order) => sum + (order.total || 0), 0);
+    }
+
+    // Fetch orders for last month
+    console.log('📡 Fetching orders for last month...');
+    const { startDate: lastMonthStart, endDate: lastMonthEnd } = getDateRange('lastMonth');
+    const lastMonthOrders = await fetchFromEcwid('/orders', {
+        limit: 100,
+        offset: 0,
+        orderBy: 'createdate'
+    });
+
+    if (lastMonthOrders && lastMonthOrders.items) {
+        const lastMonthFiltered = lastMonthOrders.items.filter(order => {
+            const orderDate = new Date(order.createDate);
+            return orderDate >= lastMonthStart && orderDate < lastMonthEnd;
+        });
+        dashboard.lastMonth.totalOrders = lastMonthFiltered.length;
+        dashboard.lastMonth.totalRevenue = lastMonthFiltered.reduce((sum, order) => sum + (order.total || 0), 0);
+    }
+
+    // Fetch abandoned carts for this week
+    console.log('🛒 Fetching abandoned carts for this week...');
+    const thisWeekCarts = await fetchFromEcwid('/abandoned_sales', {
+        limit: 100,
+        offset: 0
+    });
+
+    if (thisWeekCarts && thisWeekCarts.items) {
+        const thisWeekCartsFiltered = thisWeekCarts.items.filter(cart => {
+            const cartDate = new Date(cart.createDate);
+            return cartDate >= thisWeekStart;
+        });
+        dashboard.thisWeek.abandonedCarts = thisWeekCartsFiltered.length;
+    }
+
+    // Fetch products
+    console.log('📦 Fetching top products for this week...');
+    const allProducts = await fetchFromEcwid('/products', {
+        limit: 100,
+        offset: 0
+    });
+
+    if (thisWeekOrders && thisWeekOrders.items && allProducts && allProducts.items) {
+        // Build product sales map from orders
+        const productSales = {};
+
+        thisWeekOrders.items.forEach(order => {
+            const orderDate = new Date(order.createDate);
+            if (orderDate >= thisWeekStart) {
+                if (order.items) {
+                    order.items.forEach(item => {
+                        if (!productSales[item.productId]) {
+                            productSales[item.productId] = {
+                                productId: item.productId,
+                                name: item.productName,
+                                quantity: 0,
+                                revenue: 0
+                            };
+                        }
+                        productSales[item.productId].quantity += item.quantity;
+                        productSales[item.productId].revenue += (item.price * item.quantity);
+                    });
+                }
+            }
+        });
+
+        // Convert to array and sort by revenue
+        dashboard.topProducts = Object.values(productSales)
+            .sort((a, b) => b.revenue - a.revenue)
+            .slice(0, 10);
+    }
+
+    // Log summary
+    console.log('\n📊 WEEK SUMMARY:');
+    console.log(`   Orders This Week: ${dashboard.thisWeek.totalOrders}`);
+    console.log(`   Revenue This Week: $${dashboard.thisWeek.totalRevenue.toFixed(2)}`);
+    console.log(`   Abandoned Carts This Week: ${dashboard.thisWeek.abandonedCarts}`);
+
+    console.log('\n📊 MONTH SUMMARY:');
+    console.log(`   Orders This Month: ${dashboard.thisMonth.totalOrders}`);
+    console.log(`   Revenue This Month: $${dashboard.thisMonth.totalRevenue.toFixed(2)}`);
+    console.log(`   Top Products: ${dashboard.topProducts.length}`);
+
+    res.json(dashboard);
 });
 
 // Start server
-const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`🚀 Ecwid Dashboard Server running on port ${PORT}`);
-  console.log(`📊 API available at http://localhost:${PORT}/api/dashboard`);
-  console.log(`💚 Health check at http://localhost:${PORT}/health`);
+    console.log(`\n🚀 Ecwid Dashboard Server running on port ${PORT}`);
+    console.log(`📊 API available at http://localhost:${PORT}/api/dashboard`);
+    console.log(`💚 Health check at http://localhost:${PORT}/health`);
+    console.log(`🔐 Using Store ID: ${STORE_ID}`);
+    console.log(`🔑 API Token configured: ${API_TOKEN ? 'Yes' : 'No'}\n`);
+
+    if (!API_TOKEN) {
+        console.error('⚠️  WARNING: ECWID_API_TOKEN environment variable is not set!');
+    }
 });
