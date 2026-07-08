@@ -107,6 +107,8 @@ function getDateRange(period = 'week') {
         startDate.setDate(startDate.getDate() - dayOfWeek);
     } else if (period === 'month') {
         startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+    } else if (period === 'year') {
+        startDate = new Date(now.getFullYear(), 0, 1);
     } else if (period === 'lastWeek') {
         const dayOfWeek = startOfToday.getDay();
         startDate = new Date(startOfToday);
@@ -121,6 +123,55 @@ function getDateRange(period = 'week') {
     }
 
     return { startDate, endDate: new Date() };
+}
+
+// Get 12-month date ranges
+function getLast12Months() {
+    const months = [];
+    const now = new Date();
+    
+    for (let i = 11; i >= 0; i--) {
+        const monthStart = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        const monthEnd = new Date(now.getFullYear(), now.getMonth() - i + 1, 1);
+        months.push({
+            name: monthStart.toLocaleString('en-US', { month: 'short', year: '2-digit' }),
+            start: monthStart,
+            end: monthEnd
+        });
+    }
+    
+    return months;
+}
+
+// Calculate discount metrics
+function calculateDiscountMetrics(orders, startDate, endDate = null) {
+    if (!endDate) {
+        endDate = new Date();
+    }
+
+    const filteredOrders = orders.filter(order => {
+        const orderDate = new Date(order.createDate);
+        return orderDate >= startDate && orderDate < endDate;
+    });
+
+    const totalOrders = filteredOrders.length;
+    const ordersWithDiscount = filteredOrders.filter(order => {
+        const totalDiscount = (order.couponDiscount || 0) + (order.discount || 0);
+        return totalDiscount > 0;
+    });
+
+    const totalDiscountAmount = filteredOrders.reduce((sum, order) => {
+        return sum + ((order.couponDiscount || 0) + (order.discount || 0));
+    }, 0);
+
+    const discountPercentage = totalOrders > 0 ? ((ordersWithDiscount.length / totalOrders) * 100).toFixed(1) : 0;
+
+    return {
+        totalOrders: totalOrders,
+        ordersWithDiscounts: ordersWithDiscount.length,
+        totalDiscountAmount: totalDiscountAmount,
+        discountPercentage: discountPercentage
+    };
 }
 
 // Main dashboard endpoint
@@ -162,26 +213,44 @@ app.get('/api/dashboard', async (req, res) => {
             totalRevenue: 0, 
             abandonedCarts: 0 
         },
-        topProducts: [],
+        discountMetrics: {
+            week: { totalOrders: 0, ordersWithDiscounts: 0, totalDiscountAmount: 0, discountPercentage: 0 },
+            month: { totalOrders: 0, ordersWithDiscounts: 0, totalDiscountAmount: 0, discountPercentage: 0 },
+            year: { totalOrders: 0, ordersWithDiscounts: 0, totalDiscountAmount: 0, discountPercentage: 0 }
+        },
+        topProductsWeek: [],
+        topProductsYear: [],
+        monthlySales: [],
         lastUpdated: new Date().toISOString()
     };
 
-    console.log('📡 Fetching orders for this week...');
-    const { startDate: thisWeekStart } = getDateRange('week');
-    const thisWeekOrders = await fetchFromEcwid('/orders', {
+    console.log('📡 Fetching all orders for analysis...');
+    const allOrders = await fetchFromEcwid('/orders', {
         limit: 100,
         offset: 0
     });
 
-    if (thisWeekOrders && thisWeekOrders.items) {
-        const thisWeekFiltered = thisWeekOrders.items.filter(order => {
+    // Calculate discount metrics
+    console.log('💰 Calculating discount metrics...');
+    const { startDate: thisWeekStart } = getDateRange('week');
+    const { startDate: thisMonthStart } = getDateRange('month');
+    const { startDate: thisYearStart } = getDateRange('year');
+
+    if (allOrders && allOrders.items) {
+        dashboard.discountMetrics.week = calculateDiscountMetrics(allOrders.items, thisWeekStart);
+        dashboard.discountMetrics.month = calculateDiscountMetrics(allOrders.items, thisMonthStart);
+        dashboard.discountMetrics.year = calculateDiscountMetrics(allOrders.items, thisYearStart);
+    }
+
+    // Calculate this week metrics
+    if (allOrders && allOrders.items) {
+        const thisWeekFiltered = allOrders.items.filter(order => {
             const orderDate = new Date(order.createDate);
             return orderDate >= thisWeekStart;
         });
         dashboard.thisWeek.totalOrders = thisWeekFiltered.length;
         dashboard.thisWeek.totalRevenue = thisWeekFiltered.reduce((sum, order) => sum + (order.total || 0), 0);
         
-        // Count order statuses
         thisWeekFiltered.forEach(order => {
             const status = (order.status || 'other').toLowerCase();
             if (status === 'pending') dashboard.thisWeek.orderStatus.pending++;
@@ -192,15 +261,11 @@ app.get('/api/dashboard', async (req, res) => {
         });
     }
 
-    console.log('📡 Fetching orders for last week...');
+    // Calculate last week metrics
+    console.log('📡 Calculating last week metrics...');
     const { startDate: lastWeekStart, endDate: lastWeekEnd } = getDateRange('lastWeek');
-    const lastWeekOrders = await fetchFromEcwid('/orders', {
-        limit: 100,
-        offset: 0
-    });
-
-    if (lastWeekOrders && lastWeekOrders.items) {
-        const lastWeekFiltered = lastWeekOrders.items.filter(order => {
+    if (allOrders && allOrders.items) {
+        const lastWeekFiltered = allOrders.items.filter(order => {
             const orderDate = new Date(order.createDate);
             return orderDate >= lastWeekStart && orderDate < lastWeekEnd;
         });
@@ -208,22 +273,16 @@ app.get('/api/dashboard', async (req, res) => {
         dashboard.lastWeek.totalRevenue = lastWeekFiltered.reduce((sum, order) => sum + (order.total || 0), 0);
     }
 
-    console.log('📡 Fetching orders for this month...');
-    const { startDate: thisMonthStart } = getDateRange('month');
-    const thisMonthOrders = await fetchFromEcwid('/orders', {
-        limit: 100,
-        offset: 0
-    });
-
-    if (thisMonthOrders && thisMonthOrders.items) {
-        const thisMonthFiltered = thisMonthOrders.items.filter(order => {
+    // Calculate this month metrics
+    console.log('📡 Calculating this month metrics...');
+    if (allOrders && allOrders.items) {
+        const thisMonthFiltered = allOrders.items.filter(order => {
             const orderDate = new Date(order.createDate);
             return orderDate >= thisMonthStart;
         });
         dashboard.thisMonth.totalOrders = thisMonthFiltered.length;
         dashboard.thisMonth.totalRevenue = thisMonthFiltered.reduce((sum, order) => sum + (order.total || 0), 0);
         
-        // Count order statuses for month
         thisMonthFiltered.forEach(order => {
             const status = (order.status || 'other').toLowerCase();
             if (status === 'pending') dashboard.thisMonth.orderStatus.pending++;
@@ -234,15 +293,11 @@ app.get('/api/dashboard', async (req, res) => {
         });
     }
 
-    console.log('📡 Fetching orders for last month...');
+    // Calculate last month metrics
+    console.log('📡 Calculating last month metrics...');
     const { startDate: lastMonthStart, endDate: lastMonthEnd } = getDateRange('lastMonth');
-    const lastMonthOrders = await fetchFromEcwid('/orders', {
-        limit: 100,
-        offset: 0
-    });
-
-    if (lastMonthOrders && lastMonthOrders.items) {
-        const lastMonthFiltered = lastMonthOrders.items.filter(order => {
+    if (allOrders && allOrders.items) {
+        const lastMonthFiltered = allOrders.items.filter(order => {
             const orderDate = new Date(order.createDate);
             return orderDate >= lastMonthStart && orderDate < lastMonthEnd;
         });
@@ -250,6 +305,24 @@ app.get('/api/dashboard', async (req, res) => {
         dashboard.lastMonth.totalRevenue = lastMonthFiltered.reduce((sum, order) => sum + (order.total || 0), 0);
     }
 
+    // Calculate 12-month sales
+    console.log('📊 Calculating 12-month sales...');
+    const last12Months = getLast12Months();
+    if (allOrders && allOrders.items) {
+        dashboard.monthlySales = last12Months.map(month => {
+            const monthOrders = allOrders.items.filter(order => {
+                const orderDate = new Date(order.createDate);
+                return orderDate >= month.start && orderDate < month.end;
+            });
+            return {
+                month: month.name,
+                revenue: monthOrders.reduce((sum, order) => sum + (order.total || 0), 0),
+                orders: monthOrders.length
+            };
+        });
+    }
+
+    // Fetch abandoned carts for this week
     console.log('🛒 Fetching abandoned carts for this week...');
     const thisWeekCarts = await fetchFromEcwid('/abandoned_sales', {
         limit: 100,
@@ -265,6 +338,7 @@ app.get('/api/dashboard', async (req, res) => {
         dashboard.thisWeek.abandonedCartValue = thisWeekCartsFiltered.reduce((sum, cart) => sum + (cart.cartValue || 0), 0);
     }
 
+    // Fetch abandoned carts for this month
     console.log('🛒 Fetching abandoned carts for this month...');
     const thisMonthCarts = await fetchFromEcwid('/abandoned_sales', {
         limit: 100,
@@ -280,11 +354,12 @@ app.get('/api/dashboard', async (req, res) => {
         dashboard.thisMonth.abandonedCartValue = thisMonthCartsFiltered.reduce((sum, cart) => sum + (cart.cartValue || 0), 0);
     }
 
-    // Build product sales from orders
-    if (thisWeekOrders && thisWeekOrders.items) {
-        const productSales = {};
+    // Build product sales for THIS WEEK
+    console.log('📦 Calculating top products this week...');
+    if (allOrders && allOrders.items) {
+        const productSalesWeek = {};
 
-        thisWeekOrders.items.forEach(order => {
+        allOrders.items.forEach(order => {
             const orderDate = new Date(order.createDate);
             if (orderDate >= thisWeekStart) {
                 if (order.items) {
@@ -292,37 +367,63 @@ app.get('/api/dashboard', async (req, res) => {
                         const productId = item.productId;
                         const productName = getProductName(productId);
                         
-                        if (!productSales[productId]) {
-                            productSales[productId] = {
+                        if (!productSalesWeek[productId]) {
+                            productSalesWeek[productId] = {
                                 productId: productId,
                                 name: productName,
                                 quantity: 0,
                                 revenue: 0
                             };
                         }
-                        productSales[productId].quantity += item.quantity;
-                        productSales[productId].revenue += (item.price * item.quantity);
+                        productSalesWeek[productId].quantity += item.quantity;
+                        productSalesWeek[productId].revenue += (item.price * item.quantity);
                     });
                 }
             }
         });
 
-        dashboard.topProducts = Object.values(productSales)
+        dashboard.topProductsWeek = Object.values(productSalesWeek)
             .sort((a, b) => b.revenue - a.revenue)
             .slice(0, 10);
     }
 
-    console.log('\n📊 WEEK SUMMARY:');
-    console.log(`   Orders This Week: ${dashboard.thisWeek.totalOrders}`);
-    console.log(`   Revenue This Week: $${dashboard.thisWeek.totalRevenue.toFixed(2)}`);
-    console.log(`   Abandoned Cart Value: $${dashboard.thisWeek.abandonedCartValue.toFixed(2)}`);
-    console.log(`   Order Status - Pending: ${dashboard.thisWeek.orderStatus.pending}, Shipped: ${dashboard.thisWeek.orderStatus.shipped}, Delivered: ${dashboard.thisWeek.orderStatus.delivered}`);
+    // Build product sales for THIS YEAR
+    console.log('📦 Calculating top products this year...');
+    if (allOrders && allOrders.items) {
+        const productSalesYear = {};
 
-    console.log('\n📊 MONTH SUMMARY:');
-    console.log(`   Orders This Month: ${dashboard.thisMonth.totalOrders}`);
-    console.log(`   Revenue This Month: $${dashboard.thisMonth.totalRevenue.toFixed(2)}`);
-    console.log(`   Abandoned Cart Value: $${dashboard.thisMonth.abandonedCartValue.toFixed(2)}`);
-    console.log(`   Top Products: ${dashboard.topProducts.length}`);
+        allOrders.items.forEach(order => {
+            const orderDate = new Date(order.createDate);
+            if (orderDate >= thisYearStart) {
+                if (order.items) {
+                    order.items.forEach(item => {
+                        const productId = item.productId;
+                        const productName = getProductName(productId);
+                        
+                        if (!productSalesYear[productId]) {
+                            productSalesYear[productId] = {
+                                productId: productId,
+                                name: productName,
+                                quantity: 0,
+                                revenue: 0
+                            };
+                        }
+                        productSalesYear[productId].quantity += item.quantity;
+                        productSalesYear[productId].revenue += (item.price * item.quantity);
+                    });
+                }
+            }
+        });
+
+        dashboard.topProductsYear = Object.values(productSalesYear)
+            .sort((a, b) => b.revenue - a.revenue)
+            .slice(0, 10);
+    }
+
+    console.log('\n📊 DISCOUNT METRICS:');
+    console.log(`   Week: ${dashboard.discountMetrics.week.ordersWithDiscounts}/${dashboard.discountMetrics.week.totalOrders} orders with discount ($${dashboard.discountMetrics.week.totalDiscountAmount.toFixed(2)})`);
+    console.log(`   Month: ${dashboard.discountMetrics.month.ordersWithDiscounts}/${dashboard.discountMetrics.month.totalOrders} orders with discount ($${dashboard.discountMetrics.month.totalDiscountAmount.toFixed(2)})`);
+    console.log(`   Year: ${dashboard.discountMetrics.year.ordersWithDiscounts}/${dashboard.discountMetrics.year.totalOrders} orders with discount ($${dashboard.discountMetrics.year.totalDiscountAmount.toFixed(2)})`);
 
     res.json(dashboard);
 });
