@@ -19,6 +19,9 @@ const STORE_ID = process.env.STORE_ID || '111281497';
 const API_TOKEN = process.env.ECWID_API_TOKEN;
 const API_BASE_URL = `https://app.ecwid.com/api/v3/${STORE_ID}`;
 
+// Cache for product names
+let productCache = {};
+
 // Health check endpoint
 app.get('/health', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
@@ -54,6 +57,42 @@ async function fetchFromEcwid(endpoint, params = {}) {
         console.error(`❌ Error fetching ${endpoint}:`, error.message);
         return null;
     }
+}
+
+// Build product name cache
+async function buildProductCache() {
+    console.log('📦 Building product name cache...');
+    productCache = {};
+    
+    let offset = 0;
+    const limit = 100;
+    let hasMore = true;
+
+    while (hasMore) {
+        const products = await fetchFromEcwid('/products', {
+            limit: limit,
+            offset: offset
+        });
+
+        if (!products || !products.items || products.items.length === 0) {
+            hasMore = false;
+            break;
+        }
+
+        products.items.forEach(product => {
+            productCache[product.id] = product.name;
+        });
+
+        offset += limit;
+        hasMore = products.items.length === limit;
+    }
+
+    console.log(`✅ Cached ${Object.keys(productCache).length} products`);
+}
+
+// Get product name from cache
+function getProductName(productId) {
+    return productCache[productId] || 'Unknown';
 }
 
 // Helper function to get date range
@@ -93,6 +132,11 @@ app.get('/api/dashboard', async (req, res) => {
         return res.status(500).json({ error: 'API token not configured' });
     }
 
+    // Build product cache if empty
+    if (Object.keys(productCache).length === 0) {
+        await buildProductCache();
+    }
+
     const dashboard = {
         thisWeek: { totalOrders: 0, totalRevenue: 0, abandonedCarts: 0 },
         lastWeek: { totalOrders: 0, totalRevenue: 0, abandonedCarts: 0 },
@@ -106,8 +150,7 @@ app.get('/api/dashboard', async (req, res) => {
     const { startDate: thisWeekStart } = getDateRange('week');
     const thisWeekOrders = await fetchFromEcwid('/orders', {
         limit: 100,
-        offset: 0,
-        orderBy: 'createdate'
+        offset: 0
     });
 
     if (thisWeekOrders && thisWeekOrders.items) {
@@ -123,8 +166,7 @@ app.get('/api/dashboard', async (req, res) => {
     const { startDate: lastWeekStart, endDate: lastWeekEnd } = getDateRange('lastWeek');
     const lastWeekOrders = await fetchFromEcwid('/orders', {
         limit: 100,
-        offset: 0,
-        orderBy: 'createdate'
+        offset: 0
     });
 
     if (lastWeekOrders && lastWeekOrders.items) {
@@ -140,8 +182,7 @@ app.get('/api/dashboard', async (req, res) => {
     const { startDate: thisMonthStart } = getDateRange('month');
     const thisMonthOrders = await fetchFromEcwid('/orders', {
         limit: 100,
-        offset: 0,
-        orderBy: 'createdate'
+        offset: 0
     });
 
     if (thisMonthOrders && thisMonthOrders.items) {
@@ -157,8 +198,7 @@ app.get('/api/dashboard', async (req, res) => {
     const { startDate: lastMonthStart, endDate: lastMonthEnd } = getDateRange('lastMonth');
     const lastMonthOrders = await fetchFromEcwid('/orders', {
         limit: 100,
-        offset: 0,
-        orderBy: 'createdate'
+        offset: 0
     });
 
     if (lastMonthOrders && lastMonthOrders.items) {
@@ -184,13 +224,8 @@ app.get('/api/dashboard', async (req, res) => {
         dashboard.thisWeek.abandonedCarts = thisWeekCartsFiltered.length;
     }
 
-    console.log('📦 Fetching top products for this week...');
-    const allProducts = await fetchFromEcwid('/products', {
-        limit: 100,
-        offset: 0
-    });
-
-    if (thisWeekOrders && thisWeekOrders.items && allProducts && allProducts.items) {
+    // Build product sales from orders
+    if (thisWeekOrders && thisWeekOrders.items) {
         const productSales = {};
 
         thisWeekOrders.items.forEach(order => {
@@ -198,16 +233,19 @@ app.get('/api/dashboard', async (req, res) => {
             if (orderDate >= thisWeekStart) {
                 if (order.items) {
                     order.items.forEach(item => {
-                        if (!productSales[item.productId]) {
-                            productSales[item.productId] = {
-                                productId: item.productId,
-                                name: item.productName,
+                        const productId = item.productId;
+                        const productName = getProductName(productId);
+                        
+                        if (!productSales[productId]) {
+                            productSales[productId] = {
+                                productId: productId,
+                                name: productName,
                                 quantity: 0,
                                 revenue: 0
                             };
                         }
-                        productSales[item.productId].quantity += item.quantity;
-                        productSales[item.productId].revenue += (item.price * item.quantity);
+                        productSales[productId].quantity += item.quantity;
+                        productSales[productId].revenue += (item.price * item.quantity);
                     });
                 }
             }
@@ -239,4 +277,7 @@ app.listen(PORT, () => {
     if (!API_TOKEN) {
         console.error('⚠️  WARNING: ECWID_API_TOKEN environment variable is not set!');
     }
+
+    // Build product cache on startup
+    buildProductCache();
 });
