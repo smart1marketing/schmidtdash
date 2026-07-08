@@ -1,11 +1,18 @@
 const express = require('express');
-const cors = require('cors');
 
 const app = express();
 const PORT = process.env.PORT || 10000;
 
-// Enable CORS
-app.use(cors());
+// Manual CORS headers
+app.use((req, res, next) => {
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    if (req.method === 'OPTIONS') {
+        return res.sendStatus(200);
+    }
+    next();
+});
 
 // Configuration
 const STORE_ID = process.env.STORE_ID || '111281497';
@@ -21,7 +28,6 @@ app.get('/health', (req, res) => {
 async function fetchFromEcwid(endpoint, params = {}) {
     const url = new URL(`${API_BASE_URL}${endpoint}`);
     
-    // Add query parameters
     Object.keys(params).forEach(key => {
         url.searchParams.append(key, params[key]);
     });
@@ -87,7 +93,6 @@ app.get('/api/dashboard', async (req, res) => {
         return res.status(500).json({ error: 'API token not configured' });
     }
 
-    // Initialize response object
     const dashboard = {
         thisWeek: { totalOrders: 0, totalRevenue: 0, abandonedCarts: 0 },
         lastWeek: { totalOrders: 0, totalRevenue: 0, abandonedCarts: 0 },
@@ -97,7 +102,6 @@ app.get('/api/dashboard', async (req, res) => {
         lastUpdated: new Date().toISOString()
     };
 
-    // Fetch orders for this week
     console.log('📡 Fetching orders for this week...');
     const { startDate: thisWeekStart } = getDateRange('week');
     const thisWeekOrders = await fetchFromEcwid('/orders', {
@@ -115,7 +119,6 @@ app.get('/api/dashboard', async (req, res) => {
         dashboard.thisWeek.totalRevenue = thisWeekFiltered.reduce((sum, order) => sum + (order.total || 0), 0);
     }
 
-    // Fetch orders for last week
     console.log('📡 Fetching orders for last week...');
     const { startDate: lastWeekStart, endDate: lastWeekEnd } = getDateRange('lastWeek');
     const lastWeekOrders = await fetchFromEcwid('/orders', {
@@ -133,7 +136,6 @@ app.get('/api/dashboard', async (req, res) => {
         dashboard.lastWeek.totalRevenue = lastWeekFiltered.reduce((sum, order) => sum + (order.total || 0), 0);
     }
 
-    // Fetch orders for this month
     console.log('📡 Fetching orders for this month...');
     const { startDate: thisMonthStart } = getDateRange('month');
     const thisMonthOrders = await fetchFromEcwid('/orders', {
@@ -151,7 +153,6 @@ app.get('/api/dashboard', async (req, res) => {
         dashboard.thisMonth.totalRevenue = thisMonthFiltered.reduce((sum, order) => sum + (order.total || 0), 0);
     }
 
-    // Fetch orders for last month
     console.log('📡 Fetching orders for last month...');
     const { startDate: lastMonthStart, endDate: lastMonthEnd } = getDateRange('lastMonth');
     const lastMonthOrders = await fetchFromEcwid('/orders', {
@@ -169,7 +170,6 @@ app.get('/api/dashboard', async (req, res) => {
         dashboard.lastMonth.totalRevenue = lastMonthFiltered.reduce((sum, order) => sum + (order.total || 0), 0);
     }
 
-    // Fetch abandoned carts for this week
     console.log('🛒 Fetching abandoned carts for this week...');
     const thisWeekCarts = await fetchFromEcwid('/abandoned_sales', {
         limit: 100,
@@ -184,7 +184,6 @@ app.get('/api/dashboard', async (req, res) => {
         dashboard.thisWeek.abandonedCarts = thisWeekCartsFiltered.length;
     }
 
-    // Fetch products
     console.log('📦 Fetching top products for this week...');
     const allProducts = await fetchFromEcwid('/products', {
         limit: 100,
@@ -192,7 +191,6 @@ app.get('/api/dashboard', async (req, res) => {
     });
 
     if (thisWeekOrders && thisWeekOrders.items && allProducts && allProducts.items) {
-        // Build product sales map from orders
         const productSales = {};
 
         thisWeekOrders.items.forEach(order => {
@@ -215,17 +213,14 @@ app.get('/api/dashboard', async (req, res) => {
             }
         });
 
-        // Convert to array and sort by revenue
         dashboard.topProducts = Object.values(productSales)
             .sort((a, b) => b.revenue - a.revenue)
             .slice(0, 10);
     }
 
-    // Log summary
     console.log('\n📊 WEEK SUMMARY:');
     console.log(`   Orders This Week: ${dashboard.thisWeek.totalOrders}`);
     console.log(`   Revenue This Week: $${dashboard.thisWeek.totalRevenue.toFixed(2)}`);
-    console.log(`   Abandoned Carts This Week: ${dashboard.thisWeek.abandonedCarts}`);
 
     console.log('\n📊 MONTH SUMMARY:');
     console.log(`   Orders This Month: ${dashboard.thisMonth.totalOrders}`);
@@ -235,11 +230,9 @@ app.get('/api/dashboard', async (req, res) => {
     res.json(dashboard);
 });
 
-// Start server
 app.listen(PORT, () => {
     console.log(`\n🚀 Ecwid Dashboard Server running on port ${PORT}`);
-    console.log(`📊 API available at http://localhost:${PORT}/api/dashboard`);
-    console.log(`💚 Health check at http://localhost:${PORT}/health`);
+    console.log(`📊 API available at https://schmidtdash.onrender.com/api/dashboard`);
     console.log(`🔐 Using Store ID: ${STORE_ID}`);
     console.log(`🔑 API Token configured: ${API_TOKEN ? 'Yes' : 'No'}\n`);
 
