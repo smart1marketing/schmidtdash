@@ -1,5 +1,4 @@
 const express = require('express');
-const fetch = require('node-fetch');
 const cors = require('cors');
 
 const app = express();
@@ -58,15 +57,12 @@ function getDateRange(period = 'week') {
     let startDate;
 
     if (period === 'week') {
-        // Start of this week (Sunday)
         const dayOfWeek = startOfToday.getDay();
         startDate = new Date(startOfToday);
         startDate.setDate(startDate.getDate() - dayOfWeek);
     } else if (period === 'month') {
-        // Start of this month
         startDate = new Date(now.getFullYear(), now.getMonth(), 1);
     } else if (period === 'lastWeek') {
-        // Start of last week
         const dayOfWeek = startOfToday.getDay();
         startDate = new Date(startOfToday);
         startDate.setDate(startDate.getDate() - dayOfWeek - 7);
@@ -74,7 +70,6 @@ function getDateRange(period = 'week') {
         endDate.setDate(endDate.getDate() + 7);
         return { startDate, endDate };
     } else if (period === 'lastMonth') {
-        // Start of last month
         startDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
         const endDate = new Date(now.getFullYear(), now.getMonth(), 1);
         return { startDate, endDate };
