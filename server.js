@@ -138,10 +138,30 @@ app.get('/api/dashboard', async (req, res) => {
     }
 
     const dashboard = {
-        thisWeek: { totalOrders: 0, totalRevenue: 0, abandonedCarts: 0 },
-        lastWeek: { totalOrders: 0, totalRevenue: 0, abandonedCarts: 0 },
-        thisMonth: { totalOrders: 0, totalRevenue: 0, abandonedCarts: 0 },
-        lastMonth: { totalOrders: 0, totalRevenue: 0, abandonedCarts: 0 },
+        thisWeek: { 
+            totalOrders: 0, 
+            totalRevenue: 0, 
+            abandonedCarts: 0,
+            abandonedCartValue: 0,
+            orderStatus: { pending: 0, processing: 0, shipped: 0, delivered: 0, other: 0 }
+        },
+        lastWeek: { 
+            totalOrders: 0, 
+            totalRevenue: 0, 
+            abandonedCarts: 0 
+        },
+        thisMonth: { 
+            totalOrders: 0, 
+            totalRevenue: 0, 
+            abandonedCarts: 0,
+            abandonedCartValue: 0,
+            orderStatus: { pending: 0, processing: 0, shipped: 0, delivered: 0, other: 0 }
+        },
+        lastMonth: { 
+            totalOrders: 0, 
+            totalRevenue: 0, 
+            abandonedCarts: 0 
+        },
         topProducts: [],
         lastUpdated: new Date().toISOString()
     };
@@ -160,6 +180,16 @@ app.get('/api/dashboard', async (req, res) => {
         });
         dashboard.thisWeek.totalOrders = thisWeekFiltered.length;
         dashboard.thisWeek.totalRevenue = thisWeekFiltered.reduce((sum, order) => sum + (order.total || 0), 0);
+        
+        // Count order statuses
+        thisWeekFiltered.forEach(order => {
+            const status = (order.status || 'other').toLowerCase();
+            if (status === 'pending') dashboard.thisWeek.orderStatus.pending++;
+            else if (status === 'processing') dashboard.thisWeek.orderStatus.processing++;
+            else if (status === 'shipped') dashboard.thisWeek.orderStatus.shipped++;
+            else if (status === 'delivered') dashboard.thisWeek.orderStatus.delivered++;
+            else dashboard.thisWeek.orderStatus.other++;
+        });
     }
 
     console.log('📡 Fetching orders for last week...');
@@ -192,6 +222,16 @@ app.get('/api/dashboard', async (req, res) => {
         });
         dashboard.thisMonth.totalOrders = thisMonthFiltered.length;
         dashboard.thisMonth.totalRevenue = thisMonthFiltered.reduce((sum, order) => sum + (order.total || 0), 0);
+        
+        // Count order statuses for month
+        thisMonthFiltered.forEach(order => {
+            const status = (order.status || 'other').toLowerCase();
+            if (status === 'pending') dashboard.thisMonth.orderStatus.pending++;
+            else if (status === 'processing') dashboard.thisMonth.orderStatus.processing++;
+            else if (status === 'shipped') dashboard.thisMonth.orderStatus.shipped++;
+            else if (status === 'delivered') dashboard.thisMonth.orderStatus.delivered++;
+            else dashboard.thisMonth.orderStatus.other++;
+        });
     }
 
     console.log('📡 Fetching orders for last month...');
@@ -222,6 +262,22 @@ app.get('/api/dashboard', async (req, res) => {
             return cartDate >= thisWeekStart;
         });
         dashboard.thisWeek.abandonedCarts = thisWeekCartsFiltered.length;
+        dashboard.thisWeek.abandonedCartValue = thisWeekCartsFiltered.reduce((sum, cart) => sum + (cart.cartValue || 0), 0);
+    }
+
+    console.log('🛒 Fetching abandoned carts for this month...');
+    const thisMonthCarts = await fetchFromEcwid('/abandoned_sales', {
+        limit: 100,
+        offset: 0
+    });
+
+    if (thisMonthCarts && thisMonthCarts.items) {
+        const thisMonthCartsFiltered = thisMonthCarts.items.filter(cart => {
+            const cartDate = new Date(cart.createDate);
+            return cartDate >= thisMonthStart;
+        });
+        dashboard.thisMonth.abandonedCarts = thisMonthCartsFiltered.length;
+        dashboard.thisMonth.abandonedCartValue = thisMonthCartsFiltered.reduce((sum, cart) => sum + (cart.cartValue || 0), 0);
     }
 
     // Build product sales from orders
@@ -259,10 +315,13 @@ app.get('/api/dashboard', async (req, res) => {
     console.log('\n📊 WEEK SUMMARY:');
     console.log(`   Orders This Week: ${dashboard.thisWeek.totalOrders}`);
     console.log(`   Revenue This Week: $${dashboard.thisWeek.totalRevenue.toFixed(2)}`);
+    console.log(`   Abandoned Cart Value: $${dashboard.thisWeek.abandonedCartValue.toFixed(2)}`);
+    console.log(`   Order Status - Pending: ${dashboard.thisWeek.orderStatus.pending}, Shipped: ${dashboard.thisWeek.orderStatus.shipped}, Delivered: ${dashboard.thisWeek.orderStatus.delivered}`);
 
     console.log('\n📊 MONTH SUMMARY:');
     console.log(`   Orders This Month: ${dashboard.thisMonth.totalOrders}`);
     console.log(`   Revenue This Month: $${dashboard.thisMonth.totalRevenue.toFixed(2)}`);
+    console.log(`   Abandoned Cart Value: $${dashboard.thisMonth.abandonedCartValue.toFixed(2)}`);
     console.log(`   Top Products: ${dashboard.topProducts.length}`);
 
     res.json(dashboard);
